@@ -2,7 +2,7 @@
 UNAME = $(shell uname)
 
 AR_HOME = ../../..
-AR_CPPFLAGS = -I$(AR_HOME)/include/linux-x86_64 -I$(AR_HOME)/include -I$(AR_HOME)/lib/SRC/KPM/FreakMatcher
+AR_CPPFLAGS = -I$(AR_HOME)/include -I$(AR_HOME)/lib/SRC/KPM/FreakMatcher
 
 CC=cc
 CXX=g++ -std=c++11
