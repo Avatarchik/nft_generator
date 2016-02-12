@@ -107,6 +107,6 @@ $(TARGET): $(OBJS)
 	$(RANLIB) $@ 
 
 clean:
-	-rm -f *.o *~ *.bak
+	-rm -f *.o *~ *.bak $(OBJS)
 	-rm $(TARGET)
 

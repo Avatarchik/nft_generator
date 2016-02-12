@@ -956,27 +956,7 @@ char *arUtilGetResourcesDirectoryPath(AR_UTIL_RESOURCES_DIRECTORY_BEHAVIOR behav
             
             
         case AR_UTIL_RESOURCES_DIRECTORY_BEHAVIOR_USE_BUNDLE_RESOURCES_DIR:
-#if defined(__APPLE__)
-        {
-            // Change working directory to resources directory inside app bundle.
-            wpath1 = NULL;
-            CFURLRef pathCFURLRef = CFBundleCopyResourcesDirectoryURL(CFBundleGetMainBundle()); // Get relative path to resources directory.
-            if (pathCFURLRef) {
-                wpath1 = (char *)calloc(MAXPATHLEN, sizeof(char)); //getcwd(path, MAXPATHLEN);
-                if (wpath1) {
-                    if (!CFURLGetFileSystemRepresentation(pathCFURLRef, true, (UInt8*)wpath1, MAXPATHLEN)) { // true in param 2 resolves against base.
-                        ARLOGe("Error: Unable to get file system representation of a CFURL.\n");
-                        free(wpath1);
-                        wpath1 = NULL;
-                    }
-                }
-                CFRelease(pathCFURLRef);
-            }
-            return (wpath1);
-        }
-#else
             return (NULL); // Unsupported OS.
-#endif
             break;
             
             
@@ -1057,16 +1037,7 @@ char *arUtilGetResourcesDirectoryPath(AR_UTIL_RESOURCES_DIRECTORY_BEHAVIOR behav
             if (isAttached) (*gJavaVM)->DetachCurrentThread(gJavaVM); // Clean up.
             return (wpath1);
         }
-#elif defined(__APPLE__) && defined(__OBJC__) // iOS/OS X.
-        {
-            NSString *nssHomeDir = NSHomeDirectory(); // CoreFoundation equivalent is CFCopyHomeDirectoryURL(), iOS 6.0+ only.
-            if (!nssHomeDir) {
-                return (NULL);
-            }
-            wpath1 = strdup([nssHomeDir UTF8String]);
-            return wpath1;
-        }
-#elif defined(__linux)
+#elif defined(__linux) || defined(__APPLE__)
             if (!((wpath1 = getenv("HOME")))) {
                 return (NULL);
             }
@@ -1080,23 +1051,6 @@ char *arUtilGetResourcesDirectoryPath(AR_UTIL_RESOURCES_DIRECTORY_BEHAVIOR behav
         case AR_UTIL_RESOURCES_DIRECTORY_BEHAVIOR_USE_APP_CACHE_DIR:
 #if defined(_WIN32)
             return (NULL);
-#elif defined(__APPLE__) // iOS/OS X.
-        {
-#  ifdef __OBJC__
-            NSURL *cacheDir = [[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] objectAtIndex:0];
-            if (!cacheDir) {
-                return (NULL);
-            }
-            wpath1 = strdup([[cacheDir path] UTF8String]);
-#  else
-            size_t len = confstr(_CS_DARWIN_USER_CACHE_DIR, NULL, 0);
-            if (!len) return (NULL);
-            wpath1 = (char *)malloc(len);
-            len = confstr(_CS_DARWIN_USER_CACHE_DIR, wpath1, len); // On OS X, returns a folder in the sandbox hierachy under /var/folders/.
-            if (!len) return (NULL);
-#  endif
-            return (wpath1);
-        }
 #elif defined(ANDROID)
         {
             // Make JNI calls to get the Context's cache directory.
