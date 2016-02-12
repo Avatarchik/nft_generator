@@ -179,5 +179,5 @@ $(TARGET): $(OBJS) $(OBJS_OBJC)
 	$(RANLIB) $@
 
 clean:
-	-rm -f *.o *~ *.bak
+	-rm -f *.o *~ *.bak arLabelingSub/*.o arLabelingSub/*.bak
 	-rm $(TARGET)
