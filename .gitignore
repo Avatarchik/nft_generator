@@ -1,0 +1,11 @@
+node_modules
+.env
+node_modules
+newrelic_agent.log
+app/tmp
+.idea
+*.jar
+lib/
+*.log
+app/public/js/vendor
+uploads
