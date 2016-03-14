@@ -188,9 +188,9 @@ AR2FeatureMapT *ar2GenFeatureMap( AR2ImageT *image,
         //if( (float )j / (float )(xsize*ysize) >= 0.2f ) break;
     }
     k = i;
-    ARLOGi("         ImageSize = %7d[pixel]\n", xsize*ysize);
-    ARLOGi("Extracted features = %7d[pixel]\n", sum);
-    ARLOGi(" Filtered features = %7d[pixel]\n", j);
+    ARLOGi("ar2GenFeatureMap          ImageSize = %7d[pixel]\n", xsize*ysize);
+    ARLOGi("ar2GenFeatureMap Extracted features = %7d[pixel]\n", sum);
+    ARLOGi("ar2GenFeatureMap  Filtered features = %7d[pixel]\n", j);
 
 
     fp = fimage;
@@ -200,6 +200,7 @@ AR2FeatureMapT *ar2GenFeatureMap( AR2ImageT *image,
         fp2++;
     }
     for( j = 1; j < ysize-1; j++ ) {
+        ARLOGi("ar2GenFeatureMap:");
         ARLOGi("\r%4d/%4d.", j+1, ysize); fflush(stdout);
         *(fp++) = 1.0f;
         fp2++;
@@ -293,7 +294,7 @@ AR2FeatureCoordT *ar2SelectFeature( AR2ImageT *image, AR2FeatureMapT *featureMap
 
     max_feature_num = (xsize/occ_size)*(ysize/occ_size);
     if( max_feature_num < 10 ) max_feature_num = 10;
-    ARLOGi("Max feature = %d\n", max_feature_num);
+    ARLOGi("ar2SelectFeature: Max feature = %d\n", max_feature_num);
     arMalloc( coord, AR2FeatureCoordT, max_feature_num );
     *num = 0;
 
@@ -418,7 +419,7 @@ AR2FeatureCoordT *ar2SelectFeature2( AR2ImageT *image, AR2FeatureMapT *featureMa
     ydiv = ysize/div_size;
 
     max_feature_num = (xsize/occ_size)*(ysize/occ_size) + xdiv*ydiv;
-    ARLOGi("Max feature = %d\n", max_feature_num);
+    ARLOGi("ar2SelectFeature2: Max feature = %d\n", max_feature_num);
     arMalloc( coord, AR2FeatureCoordT, max_feature_num );
     *num = 0;
 

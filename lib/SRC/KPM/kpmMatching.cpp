@@ -153,7 +153,7 @@ int kpmLoadImageDb(KpmHandle *kpmHandle, const char *filename)
     
     if ((fp = fopen(filename, "rb")) == NULL) {
         ARLOGe("Can't open JPEG file '%s'\n", filename);
-        ARLOGperror(NULL);
+        //ARLOGperror(false);
         return (0);
     } else {
         image = kpmReadJPEGMono(fp, &width, &height);

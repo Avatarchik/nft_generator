@@ -1,48 +1,4 @@
-/*
- *  genTexData.c
- *  ARToolKit5
- *
- *  Generates image sets and texture data.
- *
- *  Run with "--help" parameter to see usage.
- *
- *  This file is part of ARToolKit.
- *
- *  ARToolKit is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  ARToolKit is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU Lesser General Public License for more details.
- *
- *  You should have received a copy of the GNU Lesser General Public License
- *  along with ARToolKit.  If not, see <http://www.gnu.org/licenses/>.
- *
- *  As a special exception, the copyright holders of this library give you
- *  permission to link this library with independent modules to produce an
- *  executable, regardless of the license terms of these independent modules, and to
- *  copy and distribute the resulting executable under terms of your choice,
- *  provided that you also meet, for each linked independent module, the terms and
- *  conditions of the license of that module. An independent module is a module
- *  which is neither derived from nor based on this library. If you modify this
- *  library, you may extend this exception to your version of the library, but you
- *  are not obligated to do so. If you do not wish to do so, delete this exception
- *  statement from your version.
- *
- *  Copyright 2015 Daqri, LLC.
- *  Copyright 2007-2015 ARToolworks, Inc.
- *
- *  Author(s): Hirokazu Kato, Philip Lamb
- *
- */
 
-#ifdef _WIN32
-#include <windows.h>
-#  define truncf(x) floorf(x) // These are the same for positive numbers.
-#endif
 #include <stdio.h>
 #include <string.h>
 #include <AR/ar.h>
@@ -52,15 +8,10 @@
 #include <AR2/featureSet.h>
 #include <AR2/util.h>
 #include <KPM/kpm.h>
-#ifdef _WIN32
-#  define MAXPATHLEN MAX_PATH
-#else
-#  include <sys/param.h> // MAXPATHLEN
-#endif
-#if defined(__APPLE__) || defined(__linux__)
-#  define HAVE_DAEMON_FUNC 1
-#  include <unistd.h>
-#endif
+
+#include <sys/param.h> // MAXPATHLEN
+#include <unistd.h>
+
 #include <time.h> // time(), localtime(), strftime()
 
 #define          KPM_SURF_FEATURE_DENSITY_L0    70
@@ -101,8 +52,8 @@ static float                dpi = 220.0f;
 
 static float                dpiMin = 20.0f;
 static float                dpiMax = 120.0f;
-static float               *dpi_list;
-static int                  dpi_num = 0;
+static float                dpi_list[] = {120.000000, 100.793694, 80.000008, 63.496048, 50.396847, 40.000004, 31.748022, 25.198421, 20.000000};
+static int                  dpi_num = 9;
 
 static float                sd_thresh  = -1.0f;
 static float                min_thresh = -1.0f;
@@ -112,7 +63,6 @@ static int                  occ_size = -1;
 static int                  tracking_extraction_level = 0; // Allows specification from command-line.
 static int                  initialization_extraction_level = 1;
 
-static int                  background = 0;
 static char                 logfile[MAXPATHLEN] = "";
 static char                 exitcodefile[MAXPATHLEN] = "";
 static char                 exitcode = 255;
@@ -121,7 +71,7 @@ static char                 exitcode = 255;
 
 static void  usage( char *com );
 static int   readImageFromFile(const char *filename, ARUint8 **image_p, int *xsize_p, int *ysize_p, int *nc_p, float *dpi_p);
-static int   setDPI( void );
+//static int   setDPI( void );
 static void  write_exitcode(void);
 
 int main( int argc, char *argv[] )
@@ -161,8 +111,6 @@ int main( int argc, char *argv[] )
             if( sscanf(&argv[i][9], "%f", &dpiMax) != 1 ) usage(argv[0]);
         } else if( strncmp(argv[i], "-min_dpi=", 9) == 0 ) {
             if( sscanf(&argv[i][9], "%f", &dpiMin) != 1 ) usage(argv[0]);
-        } else if( strcmp(argv[i], "-background") == 0 ) {
-            background = 1;
         } else if( strcmp(argv[i], "-nofset") == 0 ) {
             genfset = 0;
         } else if( strcmp(argv[i], "-fset") == 0 ) {
@@ -230,49 +178,7 @@ int main( int argc, char *argv[] )
         ARLOGe("Error: input file must be a JPEG image (with suffix .jpeg/.jpg/.jpe). Exiting.\n");
         usage(argv[0]);
     }
-    if (background) {
-#if HAVE_DAEMON_FUNC
-        if (filename[0] != '/' || logfile[0] != '/' || exitcodefile[0] != '/') {
-            ARLOGe("Error: -background flag requires full pathname of files (input, -log or -exitcode) to be specified. Exiting.\n");
-            EXIT(E_BAD_PARAMETER);
-        }
-        if (tracking_extraction_level == -1 && (sd_thresh == -1.0 || min_thresh == -1.0 || max_thresh == -1.0)) {
-            ARLOGe("Error: -background flag requires -level or -sd_thresh, -min_thresh and -max_thresh -to be set. Exiting.\n");
-            EXIT(E_BAD_PARAMETER);
-        }
-        if (initialization_extraction_level == -1 && (featureDensity == -1)) {
-            ARLOGe("Error: -background flag requires -leveli or -surf_thresh to be set. Exiting.\n");
-            EXIT(E_BAD_PARAMETER);
-        }
-        if (dpi == -1.0) {
-            ARLOGe("Error: -background flag requires -dpi to be set. Exiting.\n");
-            EXIT(E_BAD_PARAMETER);
-        }
-        if (dpiMin != -1.0f && (dpiMin <= 0.0f || dpiMin > dpi)) {
-            ARLOGe("Error: -min_dpi must be greater than 0 and less than or equal to -dpi. Exiting.n\n");
-            EXIT(E_BAD_PARAMETER);
-        }
-        if (dpiMax != -1.0f && (dpiMax < dpiMin || dpiMax > dpi)) {
-            ARLOGe("Error: -max_dpi must be greater than or equal to -min_dpi and less than or equal to -dpi. Exiting.n\n");
-            EXIT(E_BAD_PARAMETER);
-        }
-#else
-        ARLOGe("Error: -background flag not supported on this operating system. Exiting.\n");
-        exit(E_BACKGROUND_OPERATION_UNSUPPORTED);
-#endif
-    }
-    
-    if (background) {
-#if HAVE_DAEMON_FUNC
-        // Daemonize.
-        if (daemon(0, 0) == -1) {
-            perror("Unable to detach from controlling terminal");
-            EXIT(E_UNABLE_TO_DETACH_FROM_CONTROLLING_TERMINAL);
-        }
-        // At this point, stdin, stdout and stderr point to /dev/null.
-#endif
-    }
-    
+
     if (logfile[0]) {
         if (!freopen(logfile, "a", stdout) ||
             !freopen(logfile, "a", stderr)) ARLOGe("Unable to redirect stdout or stderr to logfile.\n");
@@ -371,7 +277,7 @@ int main( int argc, char *argv[] )
         EXIT(err);
     }
 
-    setDPI();
+    //setDPI();
 
     ARLOGi("Generating ImageSet...\n");
     ARLOGi("   (Source image xsize=%d, ysize=%d, channels=%d, dpi=%.1f).\n", xsize, ysize, nc, dpi);
@@ -521,75 +427,74 @@ int main( int argc, char *argv[] )
 
 // Reads dpiMinAllowable, xsize, ysize, dpi, background, dpiMin, dpiMax.
 // Sets dpiMin, dpiMax, dpi_num, dpi_list.
-static int setDPI( void )
-{
-    float       dpiWork, dpiMinAllowable;
-    char		buf1[256];
-    int			i;
-
-    // Determine minimum allowable DPI, truncated to 3 decimal places.
-    dpiMinAllowable = truncf(((float)KPM_MINIMUM_IMAGE_SIZE / (float)(MIN(xsize, ysize))) * dpi * 1000.0) / 1000.0f;
-    
-    if (background) {
-        if (dpiMin == -1.0f) dpiMin = dpiMinAllowable;
-        if (dpiMax == -1.0f) dpiMax = dpi;
-    }
-
-    if (dpiMin == -1.0f) {
-        for (;;) {
-            printf("Enter the minimum image resolution (DPI, in range [%.3f, %.3f]): ", dpiMinAllowable, (dpiMax == -1.0f ? dpi : dpiMax));
-            if( fgets( buf1, 256, stdin ) == NULL ) EXIT(E_USER_INPUT_CANCELLED);
-            if( sscanf(buf1, "%f", &dpiMin) == 0 ) continue;
-            if (dpiMin >= dpiMinAllowable && dpiMin <= (dpiMax == -1.0f ? dpi : dpiMax)) break;
-            else printf("Error: you entered %.3f, but value must be greater than or equal to %.3f and less than or equal to %.3f.\n", dpiMin, dpiMinAllowable, (dpiMax == -1.0f ? dpi : dpiMax));
-        }
-    } else if (dpiMin < dpiMinAllowable) {
-        ARLOGe("Warning: -min_dpi=%.3f smaller than minimum allowable. Value will be adjusted to %.3f.\n", dpiMin, dpiMinAllowable);
-        dpiMin = dpiMinAllowable;
-    }
-    if (dpiMax == -1.0f) {
-        for (;;) {
-            printf("Enter the maximum image resolution (DPI, in range [%.3f, %.3f]): ", dpiMin, dpi);
-            if( fgets( buf1, 256, stdin ) == NULL ) EXIT(E_USER_INPUT_CANCELLED);
-            if( sscanf(buf1, "%f", &dpiMax) == 0 ) continue;
-            if (dpiMax >= dpiMin && dpiMax <= dpi) break;
-            else printf("Error: you entered %.3f, but value must be greater than or equal to minimum resolution (%.3f) and less than or equal to image resolution (%.3f).\n", dpiMax, dpiMin, dpi);
-        }
-    } else if (dpiMax > dpi) {
-        ARLOGe("Warning: -max_dpi=%.3f larger than maximum allowable. Value will be adjusted to %.3f.\n", dpiMax, dpi);
-        dpiMax = dpi;
-    }
-    
-    // Decide how many levels we need.
-    if (dpiMin == dpiMax) {
-        dpi_num = 1;
-    } else {
-        dpiWork = dpiMin;
-        for( i = 1;; i++ ) {
-            dpiWork *= powf(2.0f, 1.0f/3.0f); // *= 1.25992104989487
-            if( dpiWork >= dpiMax*0.95f ) {
-                break;
-            }
-        }
-        dpi_num = i + 1;
-    }
-    arMalloc(dpi_list, float, dpi_num);
-    
-    // Determine the DPI values of each level.
-    dpiWork = dpiMin;
-    for( i = 0; i < dpi_num; i++ ) {
-        ARLOGi("Image DPI (%d): %f\n", i+1, dpiWork);
-        dpi_list[dpi_num - i - 1] = dpiWork; // Lowest value goes at tail of array, highest at head.
-        dpiWork *= powf(2.0f, 1.0f/3.0f);
-        if( dpiWork >= dpiMax*0.95f ) dpiWork = dpiMax;
-    }
-
-    return 0;
-}
+//static int setDPI( void )
+//{
+//    float       dpiWork, dpiMinAllowable;
+//    char               buf1[256];
+//    int                        i;
+//
+//    // Determine minimum allowable DPI, truncated to 3 decimal places.
+//    dpiMinAllowable = truncf(((float)KPM_MINIMUM_IMAGE_SIZE / (float)(MIN(xsize, ysize))) * dpi * 1000.0) / 1000.0f;
+//
+//    if (background) {
+//        if (dpiMin == -1.0f) dpiMin = dpiMinAllowable;
+//        if (dpiMax == -1.0f) dpiMax = dpi;
+//    }
+//
+//    if (dpiMin == -1.0f) {
+//        for (;;) {
+//            printf("Enter the minimum image resolution (DPI, in range [%.3f, %.3f]): ", dpiMinAllowable, (dpiMax == -1.0f ? dpi : dpiMax));
+//            if( fgets( buf1, 256, stdin ) == NULL ) EXIT(E_USER_INPUT_CANCELLED);
+//            if( sscanf(buf1, "%f", &dpiMin) == 0 ) continue;
+//            if (dpiMin >= dpiMinAllowable && dpiMin <= (dpiMax == -1.0f ? dpi : dpiMax)) break;
+//            else printf("Error: you entered %.3f, but value must be greater than or equal to %.3f and less than or equal to %.3f.\n", dpiMin, dpiMinAllowable, (dpiMax == -1.0f ? dpi : dpiMax));
+//        }
+//    } else if (dpiMin < dpiMinAllowable) {
+//        ARLOGe("Warning: -min_dpi=%.3f smaller than minimum allowable. Value will be adjusted to %.3f.\n", dpiMin, dpiMinAllowable);
+//        dpiMin = dpiMinAllowable;
+//    }
+//    if (dpiMax == -1.0f) {
+//        for (;;) {
+//            printf("Enter the maximum image resolution (DPI, in range [%.3f, %.3f]): ", dpiMin, dpi);
+//            if( fgets( buf1, 256, stdin ) == NULL ) EXIT(E_USER_INPUT_CANCELLED);
+//            if( sscanf(buf1, "%f", &dpiMax) == 0 ) continue;
+//            if (dpiMax >= dpiMin && dpiMax <= dpi) break;
+//            else printf("Error: you entered %.3f, but value must be greater than or equal to minimum resolution (%.3f) and less than or equal to image resolution (%.3f).\n", dpiMax, dpiMin, dpi);
+//        }
+//    } else if (dpiMax > dpi) {
+//        ARLOGe("Warning: -max_dpi=%.3f larger than maximum allowable. Value will be adjusted to %.3f.\n", dpiMax, dpi);
+//        dpiMax = dpi;
+//    }
+//
+//    // Decide how many levels we need.
+//    if (dpiMin == dpiMax) {
+//        dpi_num = 1;
+//    } else {
+//        dpiWork = dpiMin;
+//        for( i = 1;; i++ ) {
+//            dpiWork *= powf(2.0f, 1.0f/3.0f); // *= 1.25992104989487
+//            if( dpiWork >= dpiMax*0.95f ) {
+//                break;
+//            }
+//        }
+//        dpi_num = i + 1;
+//    }
+//    arMalloc(dpi_list, float, dpi_num);
+//
+//    // Determine the DPI values of each level.
+//    dpiWork = dpiMin;
+//    for( i = 0; i < dpi_num; i++ ) {
+//        ARLOGi("Image DPI (%d): %f\n", i+1, dpiWork);
+//        dpi_list[dpi_num - i - 1] = dpiWork; // Lowest value goes at tail of array, highest at head.
+//        dpiWork *= powf(2.0f, 1.0f/3.0f);
+//        if( dpiWork >= dpiMax*0.95f ) dpiWork = dpiMax;
+//    }
+//
+//    return 0;
+//}
 
 static void usage( char *com )
 {
-    if (!background) {
         ARLOG("%s <filename>\n", com);
         ARLOG("    -level=n\n"
               "         (n is an integer in range 0 (few) to 4 (many). Default %d.'\n", TRACKING_EXTRACTION_LEVEL_DEFAULT);
@@ -609,7 +514,6 @@ static void usage( char *com )
         ARLOG("         x is one of: DEBUG, INFO, WARN, ERROR. Default is %s.\n", (AR_LOG_LEVEL_DEFAULT == AR_LOG_LEVEL_DEBUG ? "DEBUG" : (AR_LOG_LEVEL_DEFAULT == AR_LOG_LEVEL_INFO ? "INFO" : (AR_LOG_LEVEL_DEFAULT == AR_LOG_LEVEL_WARN ? "WARN" : (AR_LOG_LEVEL_DEFAULT == AR_LOG_LEVEL_ERROR ? "ERROR" : "UNKNOWN")))));
         ARLOG("    -exitcode=<path>\n");
         ARLOG("    --help -h -?  Display this help\n");
-    }
 
     EXIT(E_BAD_PARAMETER);
 }

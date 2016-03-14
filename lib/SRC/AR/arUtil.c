@@ -84,7 +84,7 @@
 //
 // Global required for logging functions.
 //
-int arLogLevel = AR_LOG_LEVEL_DEFAULT + 1;
+int arLogLevel = AR_LOG_LEVEL_DEBUG;
 static AR_LOG_LOGGER_CALLBACK arLogLoggerCallback = NULL;
 static int arLogLoggerCallBackOnlyIfOnSameThread = 0;
 #ifndef _WIN32
