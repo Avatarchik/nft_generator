@@ -12,3 +12,23 @@ Build:
 3. run "make clean"
 
 4. run “make"
+
+
+
+
+NOTE: [To run locally on your MAC]
+
+1. install libjpeg
+$ brew install libjpeg
+
+2. install for xcode
+$ xcode-select --install
+
+Build:
+3. run "make clean"
+4. run "make"
+
+Run to generate target data set files
+5. cd to "bin"
+[Copy the image file to "bin" directory]
+6. ./genTextData <image.jpg>
