@@ -42,6 +42,18 @@
 #include <AR2/config.h>
 #include <AR2/featureSet.h>
 
+static float *fimage2;
+
+static int cmp(const void *p, const void *q) {
+    int l = *(const int *)p;
+    int r = *(const int *)q;
+
+    if (fimage2[l] < fimage2[r]) return -1;
+    if (fimage2[l] == fimage2[r]) return 0;
+
+    return 1;
+}
+
 static int make_template( ARUint8 *imageBW, int xsize, int ysize,
                           int cx, int cy, int ts1, int ts2, float  sd_thresh,
                           float  *template, float  *vlen );
@@ -389,7 +401,7 @@ AR2FeatureCoordT *ar2SelectFeature2( AR2ImageT *image, AR2FeatureMapT *featureMa
     float              *template, vlen;
     float              min_sim;
     float              sim, min, max;
-    float              *fimage2, *fp1, *fp2;
+    float              *fp1, *fp2;
     float              dpi;
     int                xdiv, ydiv, div_size;
     int                xsize, ysize;
@@ -397,6 +409,7 @@ AR2FeatureCoordT *ar2SelectFeature2( AR2ImageT *image, AR2FeatureMapT *featureMa
     int                cx, cy;
     int                i, j;
     int                ii;
+    int                *v;
 
     if( image->xsize != featureMap->xsize || image->ysize != featureMap->ysize ) return NULL;
 
@@ -407,11 +420,15 @@ AR2FeatureCoordT *ar2SelectFeature2( AR2ImageT *image, AR2FeatureMapT *featureMa
     dpi = image->dpi;
     arMalloc(template, float , (ts1+ts2+1)*(ts1+ts2+1));
     arMalloc(fimage2, float, xsize*ysize);
+    arMalloc(v, int, xsize*ysize);
     fp1 = featureMap->map;
     fp2 = fimage2;
     for( i = 0; i < xsize*ysize; i++ ) {
+        v[i] = i;
         *(fp2++) = *(fp1++);
     }
+
+    qsort(v, xsize * ysize, sizeof(int), cmp);
 
     div_size = (ts1+ts2+1)*3;
     xdiv = xsize/div_size;
@@ -421,22 +438,19 @@ AR2FeatureCoordT *ar2SelectFeature2( AR2ImageT *image, AR2FeatureMapT *featureMa
     ARLOGi("ar2SelectFeature2: Max feature = %d\n", max_feature_num);
     arMalloc( coord, AR2FeatureCoordT, max_feature_num );
     *num = 0;
+    int pos = 0;
 
     while( *num < max_feature_num ) {
-
-        min_sim = max_sim_thresh;
-        fp2 = fimage2;
         cx = cy = -1;
-        for( j = 0; j < ysize; j++ ) {
-            for( i = 0; i < xsize; i++ ) {
-                if( *fp2 < min_sim ) {
-                    min_sim = *fp2;
-                    cx = i;
-                    cy = j;
-                }
-                fp2++;
-            }
+        while (pos < xsize * ysize && fimage2[v[pos]] >= max_sim_thresh) ++pos;
+
+        if (pos < xsize * ysize) {
+            int ind = v[pos];
+            min_sim = fimage2[ind];
+            cx = ind % xsize;
+            cy = ind / xsize;
         }
+
         if( cx == -1 ) break;
 
 #if AR2_CAPABLE_ADAPTIVE_TEMPLATE
@@ -499,27 +513,9 @@ AR2FeatureCoordT *ar2SelectFeature2( AR2ImageT *image, AR2FeatureMapT *featureMa
         }
     }
 
- 
-    fp1 = featureMap->map;
-    fp2 = fimage2;
-    for( i = 0; i < xsize*ysize; i++ ) {
-        *(fp2++) = *(fp1++);
-    }
-    for( ii = 0; ii < *num; ii++ ) {
-        cx = coord[ii].x;
-        cy = coord[ii].y;
-        for( j = -occ_size; j <= occ_size; j++ ) {
-            for( i = -occ_size; i <= occ_size; i++ ) {
-                if( cy+j < 0 || cy+j >= ysize || cx+i < 0 || cx+i >= xsize ) continue;
-                fimage2[(cy+j)*xsize+(cx+i)] = 1.0f;
-            }
-        }
-    }
-
-    ARLOGi("---------------------------------------------------------------\n");
-
     free( template );
     free( fimage2 );
+    free ( v );
 
     return coord;
 }
