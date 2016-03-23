@@ -614,31 +614,38 @@ static int make_template( ARUint8 *imageBW, int xsize, int ysize,
     if( cy - ts1 < 0 || cy + ts2 >= ysize || cx - ts1 < 0 || cx + ts2 >= xsize ) return -1;
 
     ave = 0.0f;
-    for( j = -ts1; j <= ts2; j++ ) {
-        ip = &imageBW[(cy+j)*xsize+(cx-ts1)];
-        for( i = -ts1; i <= ts2 ; i++ ) ave += *(ip++);
+
+    int pos = (cy-ts1)*xsize+(cx-ts1);
+    int ts = ts1 + ts2 + 1;
+
+# pragma omp parallel shared ( ts, imageBW ) private ( j )
+    for(j = 0; j < ts; ++j) {
+        ip = &imageBW[pos + j * xsize];
+    
+# pragma omp parallel shared ( ts, ip ) private ( i )
+# pragma omp for reduction ( + : ave )
+        for(i = 0; i < ts ; ++i)
+            ave += ip[i];
     }
-    ave /= (ts1+ts2+1)*(ts1+ts2+1);
+    ave /= ts * ts;
 
     tp = template;
     vlen1 = 0.0f;
 
-    int pos = (cy-ts1)*xsize+(cx-ts1);
-    if (fabsf(vlen2s[pos]) < 0.001) {
+    if (vlen2s[pos] == 0) {
         float sum = 0, squaresum = 0;
 
-        for( j = -ts1; j <= ts2; j++ ) {
-            ip = &imageBW[(cy+j)*xsize+(cx-ts1)];
-            for( i = -ts1; i <= ts2 ; i++ ) {
-
-                sum += *ip;
-                squaresum += *ip * *ip;
-                *tp = (float )(*(ip++)) - ave;
+        for( j = 0; j < ts; ++j ) {
+            ip = &imageBW[pos + j * xsize];
+            for( i = 0; i < ts; ++i ) {
+                sum += ip[i];
+                squaresum += ip[i] * ip[i];
+                *tp = (float )ip[i] - ave;
                 vlen1 += *tp * *tp;
                 tp++;
             }
         }
-        float vlen2 = squaresum - sum*sum/((ts1+ts2+1)*(ts1+ts2+1));
+        float vlen2 = squaresum - sum*sum/(ts * ts);
         if( vlen2 == 0.0f ) {
             vlen2 = -1;
         } else {
@@ -646,10 +653,10 @@ static int make_template( ARUint8 *imageBW, int xsize, int ysize,
         }
         vlen2s[pos] = vlen2;
     } else {
-        for( j = -ts1; j <= ts2; j++ ) {
-            ip = &imageBW[(cy+j)*xsize+(cx-ts1)];
-            for( i = -ts1; i <= ts2 ; i++ ) {
-                *tp = (float )(*(ip++)) - ave;
+        for( j = 0; j < ts; ++j ) {
+            ip = &imageBW[pos + j * xsize];
+            for( i = 0; i < ts; ++i ) {
+                *tp = (float)ip[i] - ave;
                 vlen1 += *tp * *tp;
                 tp++;
             }
@@ -657,7 +664,7 @@ static int make_template( ARUint8 *imageBW, int xsize, int ysize,
     }
 
     if( fabsf(vlen1) < 0.001 ) return -1;
-    if( vlen1/((ts1+ts2+1)*(ts1+ts2+1)) < sd_thresh*sd_thresh ) return -1;
+    if( vlen1/(ts * ts) < sd_thresh*sd_thresh ) return -1;
 
     *vlen = sqrtf(vlen1);
 
@@ -669,7 +676,7 @@ static int get_similarity( ARUint8 *imageBW, int xsize, int ysize,
                            int cx, int cy, float *sim, float *vlen2s)
 {
     ARUint8   *ip;
-    float     *tp;
+    float     *tp, *ttp;
     float     sx, sxx, sxy;
     float     vlen2;
     int       i, j;
@@ -683,17 +690,24 @@ static int get_similarity( ARUint8 *imageBW, int xsize, int ysize,
     if (vlen2s[pos] < 0)
         return -1;
 
-    if (fabsf(vlen2s[pos]) < 0.001) {
-        for( j = -ts1; j <= ts2; j++ ) {
-            ip = &imageBW[(cy+j)*xsize+(cx-ts1)];
-            for( i = -ts1; i <= ts2 ; i++ ) {
-                sx += *ip;
-                sxx += *ip * *ip;
-                sxy += *(ip++) * *(tp++);
+    int ts = ts1 + ts2 + 1;
+    if (vlen2s[pos] == 0) {
+        
+# pragma omp parallel shared ( ts, imageBW, tp) private ( j )
+        for( j = 0; j < ts; ++j ) {
+            ip = &imageBW[pos + j * xsize];
+            ttp = &tp[j * ts];
+# pragma omp parallel shared ( ts, ip, ttp) private ( i )
+# pragma omp for reduction ( + : sx, +: sxx, +: sxy )
+            
+            for( i = 0; i < ts ; ++i ) {
+                sx += ip[i];
+                sxx += ip[i] * ip[i];
+                sxy += ip[i] * ttp[i];
             }
         }
 
-        vlen2 = sxx - sx*sx/((ts1+ts2+1)*(ts1+ts2+1));
+        vlen2 = sxx - sx*sx/(ts * ts);
         if( fabsf(vlen2) < 0.001 ) {
             vlen2s[pos] = -1;
             return -1;
@@ -702,10 +716,15 @@ static int get_similarity( ARUint8 *imageBW, int xsize, int ysize,
         vlen2 = sqrtf(vlen2);
         vlen2s[pos] = vlen2;
     } else {
-        for( j = -ts1; j <= ts2; j++ ) {
-            ip = &imageBW[(cy+j)*xsize+(cx-ts1)];
-            for( i = -ts1; i <= ts2 ; i++ ) {
-                sxy += *(ip++) * *(tp++);
+# pragma omp parallel shared ( ts, imageBW, tp) private ( j )
+        for( j = 0; j < ts; ++j ) {
+            ip = &imageBW[pos + j * xsize];
+            ttp = &tp[j * ts];
+            
+# pragma omp parallel shared ( ts, ip, ttp) private ( i )
+# pragma omp for reduction ( + : sxy )
+            for( i = 0; i < ts ; ++i ) {
+                sxy += ip[i] * ttp[i];
             }
         }
 
