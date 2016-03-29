@@ -47,7 +47,6 @@
 #include <AR2/imageSet.h>
 
 static AR2ImageT *ar2GenImageLayer1 ( ARUint8 *image, int xsize, int ysize, int nc, float srcdpi, float dstdpi );
-static AR2ImageT *ar2GenImageLayer2 ( AR2ImageT *src, float dstdpi );
 #if AR2_CAPABLE_ADAPTIVE_TEMPLATE
 static void       defocus_image     ( ARUint8 *img, int xsize, int ysize, int n );
 #endif
@@ -74,6 +73,27 @@ AR2ImageSetT *ar2GenImageSet( ARUint8 *image, int xsize, int ysize, int nc, floa
         imageSet->scale[i] = ar2GenImageLayer2( imageSet->scale[0], dpi_list[i] );
     }
 
+    return imageSet;
+}
+
+AR2ImageSetT *ar2GenImageScale0( ARUint8 *image, int xsize, int ysize, int nc, float dpi, float dpi_list[], int dpi_num )
+{
+    AR2ImageSetT   *imageSet;
+    int             i;
+    
+    if( nc != 1 && nc != 3 )    return NULL;
+    if( dpi_num <= 0 )          return NULL;
+    if( dpi_list[0] > dpi )     return NULL;
+    for( i = 1; i < dpi_num; i++ ) {
+        if( dpi_list[i] > dpi_list[0] ) return NULL;
+    }
+    
+    arMalloc( imageSet, AR2ImageSetT, 1 );
+    imageSet->num = dpi_num;
+    arMalloc( imageSet->scale,  AR2ImageT*,  imageSet->num );
+    
+    imageSet->scale[0] = ar2GenImageLayer1( image, xsize, ysize, nc, dpi, dpi_list[0] );
+    
     return imageSet;
 }
 
@@ -189,6 +209,44 @@ bail:
     return NULL;
 }
 
+FILE *ar2WriteImageScale0( char *filename, AR2ImageSetT *imageSet )
+{
+    FILE          *fp;
+    AR2JpegImageT  jpegImage;
+    int            i;
+    size_t         len;
+    const char     ext[] = ".iset";
+    char          *buf;
+    
+    len = strlen(filename) + strlen(ext) + 1; // +1 for nul terminator.
+    arMalloc(buf, char, len);
+    sprintf(buf, "%s%s", filename, ext);
+    if( (fp=fopen(buf, "wb")) == NULL ) {
+        ARLOGe("Error: unable to open file '%s' for writing.\n", buf);
+        free(buf);
+        return NULL;
+    }
+    free(buf);
+    
+    if( fwrite(&(imageSet->num), sizeof(imageSet->num), 1, fp) != 1 ) goto bailBadWrite;
+    
+    jpegImage.xsize = imageSet->scale[0]->xsize;
+    jpegImage.ysize = imageSet->scale[0]->ysize;
+    jpegImage.dpi   = imageSet->scale[0]->dpi;
+    jpegImage.nc    = 1;
+
+    jpegImage.image = imageSet->scale[0]->imgBW;
+    
+    if( ar2WriteJpegImage2(fp, &jpegImage, AR2_DEFAULT_JPEG_IMAGE_QUALITY) < 0 ) goto bailBadWrite;
+
+    return fp;
+    
+bailBadWrite:
+    ARLOGe("Error saving image set: error writing data.\n");
+    fclose(fp);
+    return NULL;
+}
+
 int ar2WriteImageSet( char *filename, AR2ImageSetT *imageSet )
 {
     FILE          *fp;
@@ -243,6 +301,9 @@ int ar2FreeImageSet( AR2ImageSetT **imageSet )
     if( *imageSet == NULL ) return -1;
 
     for( i = 0; i < (*imageSet)->num; i++ ) {
+        if ((*imageSet)->scale[i] == NULL)
+            continue;
+
 #if AR2_CAPABLE_ADAPTIVE_TEMPLATE
         for( int j = 0; j < AR2_BLUR_IMAGE_MAX; j++ ) {
             free( (*imageSet)->scale[i]->imgBWBlur[j] );
@@ -334,7 +395,7 @@ static AR2ImageT *ar2GenImageLayer1( ARUint8 *image, int xsize, int ysize, int n
     return dst;
 }
 
-static AR2ImageT *ar2GenImageLayer2( AR2ImageT *src, float dpi )
+AR2ImageT *ar2GenImageLayer2( AR2ImageT *src, float dpi )
 {
     AR2ImageT   *dst;
     ARUint8     *p1, *p2;

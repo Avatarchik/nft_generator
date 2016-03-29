@@ -35,7 +35,8 @@ $(BIN_DIR)/genTexData: genTexData.o $(OBJS)
 genTexData.o: genTexData.c $(HEADDERS)
 	${CC} -c $(CFLAG) genTexData.c
 
-
-clean:
+clean_o:
 	rm -f *.o *~ *.bak
+
+clean: clean_o
 	rm -f $(BIN_DIR)/genTexData

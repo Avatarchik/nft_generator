@@ -67,8 +67,11 @@ typedef struct {
 
 /*   image.c   */
 AR2ImageSetT   *ar2GenImageSet   ( ARUint8 *image, int xsize, int ysize, int nc, float dpi, float dpi_list[], int dpi_num );
+AR2ImageSetT   *ar2GenImageScale0( ARUint8 *image, int xsize, int ysize, int nc, float dpi, float dpi_list[], int dpi_num );
+AR2ImageT      *ar2GenImageLayer2( AR2ImageT *src, float dpi );
 AR2ImageSetT   *ar2ReadImageSet  ( char *filename );
 int             ar2WriteImageSet ( char *filename, AR2ImageSetT *imageSet );
+FILE           *ar2WriteImageScale0( char *filename, AR2ImageSetT *imageSet );
 int             ar2FreeImageSet  ( AR2ImageSetT **imageSet );
 
 #ifdef __cplusplus

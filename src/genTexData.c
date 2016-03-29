@@ -262,7 +262,7 @@ int main( int argc, char *argv[] )
 
     ARLOGi("Generating ImageSet...\n");
     ARLOGi("   (Source image xsize=%d, ysize=%d, channels=%d, dpi=%.1f).\n", xsize, ysize, nc, dpi);
-    imageSet = ar2GenImageSet( image, xsize, ysize, nc, dpi, dpi_list, dpi_num );
+    imageSet = ar2GenImageScale0( image, xsize, ysize, nc, dpi, dpi_list, dpi_num );
     ar2FreeJpegImage(&jpegImage);
     if( imageSet == NULL ) {
         ARLOGe("ImageSet generation error!!\n");
@@ -271,19 +271,39 @@ int main( int argc, char *argv[] )
     ARLOGi("  Done.\n");
     ar2UtilRemoveExt( outputFilename );
     ARLOGi("Saving to %s.iset...\n", filename);
-    if( ar2WriteImageSet( outputFilename, imageSet ) < 0 ) {
+    FILE *imageSetFP;
+    if( (imageSetFP = ar2WriteImageScale0(outputFilename, imageSet)) == NULL) {
         ARLOGe("Save error: %s.iset\n", outputFilename );
         EXIT(E_DATA_PROCESSING_ERROR);
     }
     ARLOGi("  Done.\n");
 
-    if (genfset) {
+    if (genfset && genfset3)
+    {
         arMalloc( featureSet, AR2FeatureSetT, 1 );                      // A featureSet with a single image,
         arMalloc( featureSet->list, AR2FeaturePointsT, imageSet->num ); // and with 'num' scale levels of this image.
         featureSet->num = imageSet->num;
+
+        refDataSet  = NULL;
+        procMode    = KpmProcFullSize;
         
         ARLOGi("Generating FeatureList...\n");
+        ARLOGi("Generating FeatureSet3...\n");
         for( i = 0; i < imageSet->num; i++ ) {
+            if (i > 0) {
+                imageSet->scale[i] = ar2GenImageLayer2( imageSet->scale[0], dpi_list[i] );
+                if (i > 1) {
+                    free(imageSet->scale[i - 1]->imgBW);
+                    free(imageSet->scale[i - 1]);
+                    imageSet->scale[i - 1] = NULL;
+                }
+                
+                if( fwrite(&(imageSet->scale[i]->dpi), sizeof(imageSet->scale[i]->dpi), 1, imageSetFP) != 1 ) {
+                    ARLOGe("Save error: %s.iset\n", outputFilename );
+                    EXIT(E_DATA_PROCESSING_ERROR);
+                }
+            }
+
             ARLOGi("Start for %f dpi image.\n", imageSet->scale[i]->dpi);
             
             featureMap = ar2GenFeatureMap( imageSet->scale[i],
@@ -304,72 +324,36 @@ int main( int argc, char *argv[] )
             if( featureSet->list[i].coord == NULL ) num = 0;
             featureSet->list[i].num   = num;
             featureSet->list[i].scale = i;
-            
-            scale1 = 0.0f;
-            for( j = 0; j < imageSet->num; j++ ) {
-                if( imageSet->scale[j]->dpi < imageSet->scale[i]->dpi ) {
-                    if( imageSet->scale[j]->dpi > scale1 ) scale1 = imageSet->scale[j]->dpi;
-                }
-            }
+
+            if (i < imageSet->num - 1)
+                scale1 = dpi_list[i + 1];
+            else scale1 = 0.0f;
+
             if( scale1 == 0.0f ) {
                 featureSet->list[i].mindpi = imageSet->scale[i]->dpi * 0.5f;
             }
             else {
-                /*
-                 scale2 = imageSet->scale[i]->dpi;
-                 scale = sqrtf( scale1 * scale2 );
-                 featureSet->list[i].mindpi = scale2 / ((scale2/scale - 1.0f)*1.1f + 1.0f);
-                 */
                 featureSet->list[i].mindpi = scale1;
             }
             
-            scale1 = 0.0f;
-            for( j = 0; j < imageSet->num; j++ ) {
-                if( imageSet->scale[j]->dpi > imageSet->scale[i]->dpi ) {
-                    if( scale1 == 0.0f || imageSet->scale[j]->dpi < scale1 ) scale1 = imageSet->scale[j]->dpi;
-                }
-            }
+            if (i > 0)
+                scale1 = dpi_list[i - 1];
+            else scale1 = 0.0f;
+
             if( scale1 == 0.0f ) {
                 featureSet->list[i].maxdpi = imageSet->scale[i]->dpi * 2.0f;
             }
             else {
-                //scale2 = imageSet->scale[i]->dpi * 1.2f;
                 scale2 = imageSet->scale[i]->dpi;
-                /*
-                 scale = sqrtf( scale1 * scale2 );
-                 featureSet->list[i].maxdpi = scale2 * ((scale/scale2 - 1.0f)*1.1f + 1.0f);
-                 */
                 featureSet->list[i].maxdpi = scale2*0.8f + scale1*0.2f;
             }
             
             ar2FreeFeatureMap( featureMap );
-        }
-        ARLOGi("  Done.\n");
-        
-        ARLOGi("Saving FeatureSet...\n");
-        if( ar2SaveFeatureSet( outputFilename, "fset", featureSet ) < 0 ) {
-            ARLOGe("Save error: %s.fset\n", outputFilename );
-            EXIT(E_DATA_PROCESSING_ERROR);
-        }
-        ARLOGi("  Done.\n");
-        ar2FreeFeatureSet( &featureSet );
-    }
-    
-    if (genfset3) {
-        ARLOGi("Generating FeatureSet3...\n");
-        refDataSet  = NULL;
-        procMode    = KpmProcFullSize;
-        for( i = 0; i < imageSet->num; i++ ) {
-            //if( imageSet->scale[i]->dpi > 100.0f ) continue;
             
             maxFeatureNum = featureDensity * imageSet->scale[i]->xsize * imageSet->scale[i]->ysize / (480*360);
             ARLOGi("(%d, %d) %f[dpi]\n", imageSet->scale[i]->xsize, imageSet->scale[i]->ysize, imageSet->scale[i]->dpi);
             if( kpmAddRefDataSet (
-#if AR2_CAPABLE_ADAPTIVE_TEMPLATE
-                                  imageSet->scale[i]->imgBWBlur[1],
-#else
                                   imageSet->scale[i]->imgBW,
-#endif
                                   AR_PIXEL_FORMAT_MONO,
                                   imageSet->scale[i]->xsize,
                                   imageSet->scale[i]->ysize,
@@ -380,6 +364,15 @@ int main( int argc, char *argv[] )
             }
         }
         ARLOGi("  Done.\n");
+        
+        ARLOGi("Saving FeatureSet...\n");
+        if( ar2SaveFeatureSet( outputFilename, "fset", featureSet ) < 0 ) {
+            ARLOGe("Save error: %s.fset\n", outputFilename );
+            EXIT(E_DATA_PROCESSING_ERROR);
+        }
+        ARLOGi("  Done.\n");
+        ar2FreeFeatureSet( &featureSet );
+
         ARLOGi("Saving FeatureSet3...\n");
         if( kpmSaveRefDataSet(outputFilename, "fset3", refDataSet) != 0 ) {
             ARLOGe("Save error: %s.fset2\n", outputFilename );
@@ -389,6 +382,8 @@ int main( int argc, char *argv[] )
         kpmDeleteRefDataSet( &refDataSet );
     }
     
+    fclose(imageSetFP);
+
     ar2FreeImageSet( &imageSet );
 
     exitcode = E_NO_ERROR;
