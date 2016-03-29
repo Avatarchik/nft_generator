@@ -63,7 +63,6 @@ static int                  occ_size = -1;
 static int                  tracking_extraction_level = 0; // Allows specification from command-line.
 static int                  initialization_extraction_level = 1;
 
-static char                 logfile[MAXPATHLEN] = "";
 static char                 exitcodefile[MAXPATHLEN] = "";
 static char                 exitcode = 255;
 #define EXIT(c) {exitcode=c;exit(c);}
@@ -125,9 +124,6 @@ int main( int argc, char *argv[] )
             genfset3 = 0;
         } else if( strcmp(argv[i], "-fset3") == 0 ) {
             genfset3 = 1;
-        } else if( strncmp(argv[i], "-log=", 5) == 0 ) {
-            strncpy(logfile, &(argv[i][5]), sizeof(logfile) - 1);
-            logfile[sizeof(logfile) - 1] = '\0'; // Ensure NULL termination.
         } else if( strncmp(argv[i], "-loglevel=", 10) == 0 ) {
             if (strcmp(&(argv[i][10]), "DEBUG") == 0) arLogLevel = AR_LOG_LEVEL_DEBUG;
             else if (strcmp(&(argv[i][10]), "INFO") == 0) arLogLevel = AR_LOG_LEVEL_INFO;
@@ -179,23 +175,8 @@ int main( int argc, char *argv[] )
         usage(argv[0]);
     }
 
-    if (logfile[0]) {
-        if (!freopen(logfile, "a", stdout) ||
-            !freopen(logfile, "a", stderr)) ARLOGe("Unable to redirect stdout or stderr to logfile.\n");
-    }
     if (exitcodefile[0]) {
         atexit(write_exitcode);
-    }
-    
-    // Print the start date and time.
-    clock = time(NULL);
-    if (clock != (time_t)-1) {
-        struct tm *timeptr = localtime(&clock);
-        if (timeptr) {
-            char stime[26+8] = "";
-            if (strftime(stime, sizeof(stime), "%Y-%m-%d %H:%M:%S %z", timeptr)) // e.g. "1999-12-31 23:59:59 NZDT".
-                ARLOGi("--\nGenerator started at %s\n", stime);
-        }
     }
 
     if (genfset) {
@@ -410,88 +391,9 @@ int main( int argc, char *argv[] )
     
     ar2FreeImageSet( &imageSet );
 
-    // Print the start date and time.
-    clock = time(NULL);
-    if (clock != (time_t)-1) {
-        struct tm *timeptr = localtime(&clock);
-        if (timeptr) {
-            char stime[26+8] = "";
-            if (strftime(stime, sizeof(stime), "%Y-%m-%d %H:%M:%S %z", timeptr)) // e.g. "1999-12-31 23:59:59 NZDT".
-                ARLOGi("Generator finished at %s\n--\n", stime);
-        }
-    }
-
     exitcode = E_NO_ERROR;
     return (exitcode);
 }
-
-// Reads dpiMinAllowable, xsize, ysize, dpi, background, dpiMin, dpiMax.
-// Sets dpiMin, dpiMax, dpi_num, dpi_list.
-//static int setDPI( void )
-//{
-//    float       dpiWork, dpiMinAllowable;
-//    char               buf1[256];
-//    int                        i;
-//
-//    // Determine minimum allowable DPI, truncated to 3 decimal places.
-//    dpiMinAllowable = truncf(((float)KPM_MINIMUM_IMAGE_SIZE / (float)(MIN(xsize, ysize))) * dpi * 1000.0) / 1000.0f;
-//
-//    if (background) {
-//        if (dpiMin == -1.0f) dpiMin = dpiMinAllowable;
-//        if (dpiMax == -1.0f) dpiMax = dpi;
-//    }
-//
-//    if (dpiMin == -1.0f) {
-//        for (;;) {
-//            printf("Enter the minimum image resolution (DPI, in range [%.3f, %.3f]): ", dpiMinAllowable, (dpiMax == -1.0f ? dpi : dpiMax));
-//            if( fgets( buf1, 256, stdin ) == NULL ) EXIT(E_USER_INPUT_CANCELLED);
-//            if( sscanf(buf1, "%f", &dpiMin) == 0 ) continue;
-//            if (dpiMin >= dpiMinAllowable && dpiMin <= (dpiMax == -1.0f ? dpi : dpiMax)) break;
-//            else printf("Error: you entered %.3f, but value must be greater than or equal to %.3f and less than or equal to %.3f.\n", dpiMin, dpiMinAllowable, (dpiMax == -1.0f ? dpi : dpiMax));
-//        }
-//    } else if (dpiMin < dpiMinAllowable) {
-//        ARLOGe("Warning: -min_dpi=%.3f smaller than minimum allowable. Value will be adjusted to %.3f.\n", dpiMin, dpiMinAllowable);
-//        dpiMin = dpiMinAllowable;
-//    }
-//    if (dpiMax == -1.0f) {
-//        for (;;) {
-//            printf("Enter the maximum image resolution (DPI, in range [%.3f, %.3f]): ", dpiMin, dpi);
-//            if( fgets( buf1, 256, stdin ) == NULL ) EXIT(E_USER_INPUT_CANCELLED);
-//            if( sscanf(buf1, "%f", &dpiMax) == 0 ) continue;
-//            if (dpiMax >= dpiMin && dpiMax <= dpi) break;
-//            else printf("Error: you entered %.3f, but value must be greater than or equal to minimum resolution (%.3f) and less than or equal to image resolution (%.3f).\n", dpiMax, dpiMin, dpi);
-//        }
-//    } else if (dpiMax > dpi) {
-//        ARLOGe("Warning: -max_dpi=%.3f larger than maximum allowable. Value will be adjusted to %.3f.\n", dpiMax, dpi);
-//        dpiMax = dpi;
-//    }
-//
-//    // Decide how many levels we need.
-//    if (dpiMin == dpiMax) {
-//        dpi_num = 1;
-//    } else {
-//        dpiWork = dpiMin;
-//        for( i = 1;; i++ ) {
-//            dpiWork *= powf(2.0f, 1.0f/3.0f); // *= 1.25992104989487
-//            if( dpiWork >= dpiMax*0.95f ) {
-//                break;
-//            }
-//        }
-//        dpi_num = i + 1;
-//    }
-//    arMalloc(dpi_list, float, dpi_num);
-//
-//    // Determine the DPI values of each level.
-//    dpiWork = dpiMin;
-//    for( i = 0; i < dpi_num; i++ ) {
-//        ARLOGi("Image DPI (%d): %f\n", i+1, dpiWork);
-//        dpi_list[dpi_num - i - 1] = dpiWork; // Lowest value goes at tail of array, highest at head.
-//        dpiWork *= powf(2.0f, 1.0f/3.0f);
-//        if( dpiWork >= dpiMax*0.95f ) dpiWork = dpiMax;
-//    }
-//
-//    return 0;
-//}
 
 static void usage( char *com )
 {
