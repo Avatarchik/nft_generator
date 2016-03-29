@@ -297,6 +297,12 @@ int main( int argc, char *argv[] )
                     free(imageSet->scale[i - 1]);
                     imageSet->scale[i - 1] = NULL;
                 }
+         
+                if (i == (imageSet->num - 1)) {
+                    free(imageSet->scale[0]->imgBW);
+                    free(imageSet->scale[0]);
+                    imageSet->scale[0] = NULL;
+                }
                 
                 if( fwrite(&(imageSet->scale[i]->dpi), sizeof(imageSet->scale[i]->dpi), 1, imageSetFP) != 1 ) {
                     ARLOGe("Save error: %s.iset\n", outputFilename );
