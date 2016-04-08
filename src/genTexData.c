@@ -51,9 +51,9 @@ static int                  nc;
 static float                dpi = 220.0f;
 
 static float                dpiMin = 20.0f;
-static float                dpiMax = 120.0f;
-static float                dpi_list[] = {120.000000, 100.793694, 80.000008, 63.496048, 50.396847, 40.000004, 31.748022, 25.198421, 20.000000};
-static int                  dpi_num = 9;
+static float                dpiMax = 80.0f;
+static float                dpi_list[] = {80.000008, 63.496048, 50.396847, 40.000004, 31.748022, 25.198421, 20.000000};
+static int                  dpi_num = 7;
 
 static float                sd_thresh  = -1.0f;
 static float                min_thresh = -1.0f;
