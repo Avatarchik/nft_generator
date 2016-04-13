@@ -27,16 +27,18 @@ LIBS= -lAR2 -lAR -ljpeg -lKPM
 OBJS =
 HEADDERS =
 
-all: $(BIN_DIR)/genTexData
+all: clean_o $(BIN_DIR)/genTexData
 
 $(BIN_DIR)/genTexData: genTexData.o $(OBJS)
-	${CXX} -o $(BIN_DIR)/genTexData genTexData.o $(OBJS) $(LDFLAG) $(LIBS)
+	${CXX} -o $(BIN_DIR)/genTexData_new genTexData.o $(OBJS) $(LDFLAG) $(LIBS)
+	rm -f $(BIN_DIR)/genTexData
+	mv $(BIN_DIR)/genTexData_new $(BIN_DIR)/genTexData
 
 genTexData.o: genTexData.c $(HEADDERS)
 	${CC} -c $(CFLAG) genTexData.c
 
 clean_o:
-	rm -f *.o *~ *.bak
+	rm -f *.o *~ *.bak $(BIN_DIR)/genTexData_new
 
 clean: clean_o
 	rm -f $(BIN_DIR)/genTexData
